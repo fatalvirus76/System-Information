@@ -141,21 +141,65 @@ enum SystemProbe {
         var externalConnected: Bool?
     }
 
+    // Batteritjänsten hittas EN gång och cachas — sandbox kan neka namngivna tjänster,
+    // och en rekursiv IOService-walk är för dyr för att köra varje tick.
+    nonisolated(unsafe) private static var batteryServiceCache: io_service_t = 0
+    nonisolated(unsafe) private static var batterySearchAttempted = false
+    static let batteryLock = NSLock()
+
+    /// Tillgänglig = antingen rättig tjänst, eller att letandet är klarbt genomfört men nekat
+    static var batteryServiceAccessible: Bool {
+        batteryLock.lock(); defer { batteryLock.unlock() }
+        return batteryServiceCache != 0
+    }
+
+    private static func locateBatteryService() -> io_service_t {
+        for cls in ["AppleSmartBattery", "AppleBatteryDevice"] {
+            let s = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching(cls))
+            if s != 0 { return s }
+        }
+        // Sista utväg: rekursiv walk i IOService-planet,leta efter DesignCapacity-nyckeln
+        let root = IORegistryGetRootEntry(kIOMainPortDefault)
+        guard root != 0 else { return 0 }
+        defer { IOObjectRelease(root) }
+        var it: io_iterator_t = 0
+        guard IORegistryEntryCreateIterator(root, "IOService",
+                                            IOOptionBits(kIORegistryIterateRecursively), &it) == KERN_SUCCESS else { return 0 }
+        defer { IOObjectRelease(it) }
+        var checked = 0
+        while checked < 4000 {
+            let node = IOIteratorNext(it)
+            if node == 0 { break }
+            checked += 1
+            let probe = IORegistryEntryCreateCFProperty(node, "DesignCapacity" as CFString, kCFAllocatorDefault, 0)
+            if probe != nil {
+                _ = probe?.takeRetainedValue()
+                return node  // behålls i cachen, släpps aldrig med flit (appen lever lika länge)
+            }
+            IOObjectRelease(node)
+        }
+        return 0
+    }
+
     static func registryBattery() -> RawBattery {
         var b = RawBattery()
         #if !targetEnvironment(simulator)
-        // IOKit är bara länkbart på riktigt iOS-mål (simulatorns x86_64-slice saknar symbolerna).
-        let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleBatteryDevice"))
+        batteryLock.lock()
+        if batteryServiceCache == 0 && !batterySearchAttempted {
+            batteryServiceCache = locateBatteryService()
+            batterySearchAttempted = true
+        }
+        let service = batteryServiceCache
+        batteryLock.unlock()
         guard service != 0 else { return b }
-        defer { IOObjectRelease(service) }
         func intVal(_ key: String) -> Int? {
             guard let v = IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() else { return nil }
             if let n = v as? Int { return n }
             if let n = v as? NSNumber { return n.intValue }
             return nil
         }
-        b.currentCapacity = intVal("AppleRawCurrentCapacity")
-        b.maxCapacity = intVal("AppleRawMaxCapacity")
+        b.currentCapacity = intVal("AppleRawCurrentCapacity") ?? intVal("CurrentCapacity")
+        b.maxCapacity = intVal("AppleRawMaxCapacity") ?? intVal("MaxCapacity")
         b.designCapacity = intVal("DesignCapacity")
         b.cycles = intVal("CycleCount")
         b.amperage = intVal("InstantAmperage")

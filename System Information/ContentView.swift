@@ -272,10 +272,17 @@ struct BatteryHealthCard: View {
                     MeterBar(fraction: h / 100, color: p.levelColor(100 - h))
                 }
                 if m.live.battery.healthPct == nil {
-                    Text("Batteridetaljer (hälsa, cykler, temperatur) kräver riktig hårdvara — visas ej i simulatorn.")
-                        .font(.system(size: 10, design: .rounded))
-                        .foregroundStyle(p.tertiaryText)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if m.live.battery.detailBlocked {
+                        Text("Apple ger inte appar tillgång till batteridetaljer (hälsa, cykler, temperatur) — iOS-sandboxen blockerar dem. Värdena finns bara i Inställningar → Batteri.")
+                            .font(.system(size: 10, design: .rounded))
+                            .foregroundStyle(p.tertiaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text("Batteridetaljer (hälsa, cykler, temperatur) kräver riktig hårdvara — visas ej i simulatorn.")
+                            .font(.system(size: 10, design: .rounded))
+                            .foregroundStyle(p.tertiaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 HStack(spacing: 12) {
                     if let c = m.live.battery.cycleCount {

@@ -173,6 +173,11 @@ final class SystemMonitor: ObservableObject {
             }
         }
         batt.isEstimated = batt.timeRemainingText != nil
+        #if !targetEnvironment(simulator)
+        // Om inga hårdvaruvärden alls kom in är tjänsten troligen nekad av sandbox
+        batt.detailBlocked = (ps.maxCapacity == nil && ps.designCapacity == nil && ps.cycles == nil
+                              && !SystemProbe.batteryServiceAccessible)
+        #endif
         return batt
     }
 }

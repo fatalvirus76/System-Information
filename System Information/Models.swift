@@ -71,6 +71,7 @@ struct BatteryReading {
     var tempC: Double? = nil
     var timeRemainingText: String? = nil   // IOPMPowerSource-estimering
     var isEstimated: Bool = false
+    var detailBlocked: Bool = false        // true = IORegistry-tjänsten nekad av sandbox
 
     var stateIcon: String {
         switch state {
