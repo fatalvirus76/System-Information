@@ -15,9 +15,11 @@ enum DeviceProfileBuilder {
             .compactMap { $0 as? UIWindowScene }
             .first(where: { $0.activationState == .foregroundActive })
             ?? UIApplication.shared.connectedScenes.first as? UIWindowScene
-        let screen = scene?.screen ?? UIScreen.main
-        let native = screen.nativeBounds
-        let refresh = Double(screen.maximumFramesPerSecond)
+        let screen = scene?.screen
+        let native = screen?.nativeBounds ?? .zero
+        let refresh = Double(screen?.maximumFramesPerSecond ?? 60)
+        let nativeScale = screen?.nativeScale ?? 3.0
+        let brightness = Double(screen?.brightness ?? 0) * 100
 
         // Kärnor: prestanda/effekt via sysctl (afinities fungerar inte alltid; slå upp per freq)
         let active = pi.activeProcessorCount
@@ -54,7 +56,7 @@ enum DeviceProfileBuilder {
             appMemoryLimit: recommendedMem(pi),
             screenNativeW: Int(native.width),
             screenNativeH: Int(native.height),
-            screenScale: screen.nativeScale,
+            screenScale: nativeScale,
             refreshRate: refresh,
             isSimulator: isSimulatorPath(),
             timeZoneID: TimeZone.current.identifier,
@@ -67,7 +69,7 @@ enum DeviceProfileBuilder {
             lowPowerMode: pi.isLowPowerModeEnabled,
             vpnOn: false,
             thermalState: "—",
-            brightnessPct: Double(UIScreen.main.brightness) * 100,
+            brightnessPct: brightness,
             autoLockSeconds: autoLockSeconds()
         )
     }

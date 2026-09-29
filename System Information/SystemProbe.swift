@@ -1,8 +1,7 @@
 import Foundation
 import Darwin
-#if !targetEnvironment(simulator)
-import IOKit
-#endif
+// IOKit-funktionerna comes via IOKitBridge.h (SWIFT_OBJC_BRIDGING_HEADER) —
+// iOS har ingen swiftmodule för IOKit, så `import IOKit` fungerar inte.
 
 // MARK: - Lågnivå-prob (Mach/IOKit/POSIX) — körs i bakgrundsqueue
 enum SystemProbe {
@@ -145,6 +144,7 @@ enum SystemProbe {
     static func registryBattery() -> RawBattery {
         var b = RawBattery()
         #if !targetEnvironment(simulator)
+        // IOKit är bara länkbart på riktigt iOS-mål (simulatorns x86_64-slice saknar symbolerna).
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleBatteryDevice"))
         guard service != 0 else { return b }
         defer { IOObjectRelease(service) }
@@ -165,6 +165,20 @@ enum SystemProbe {
         if let t = intVal("Temperature") { b.tempC = Double(t) / 10.0 }
         #endif
         return b
+    }
+
+    // ---- Gles disk-/mappskanning med intern cache (anrops bara från workQueue) ----
+    private static var lastDisk: (total: Int64, free: Int64, important: Int64)?
+    private static var lastAppSize: Int64 = 0
+
+    static func diskAndAppSize(heavy: Bool) -> (total: Int64, free: Int64, important: Int64, appSize: Int64) {
+        if heavy || lastDisk == nil {
+            let d = diskStats()
+            lastDisk = (d.total, d.free, d.importantFree)
+            lastAppSize = directorySize(AppGroupPaths.containerRoot) + directorySize(AppGroupPaths.dataRoot)
+        }
+        let disk = lastDisk ?? (0, 0, 0)
+        return (disk.total, disk.free, disk.important, lastAppSize)
     }
 
     // ---- Disk ----

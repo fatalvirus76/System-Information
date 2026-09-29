@@ -163,7 +163,7 @@ final class DNSProbe: ObservableObject {
         error = nil
         let hostCopy = host
         defer { running = false }
-        return await withCheckedContinuation { cont in
+        let outcome: (ips: [String], code: Int32) = await withCheckedContinuation { (cont: CheckedContinuation<(ips: [String], code: Int32), Never>) in
             DispatchQueue.global(qos: .utility).async {
                 var hints = addrinfo(
                     ai_flags: AI_ADDRCONFIG,
@@ -179,6 +179,7 @@ final class DNSProbe: ObservableObject {
                 let code = getaddrinfo(hostCopy, nil, &hints, &res)
                 var ips: [String] = []
                 if code == 0, let res {
+                    defer { freeaddrinfo(res) }
                     var p: UnsafeMutablePointer<addrinfo>? = res
                     while let cur = p {
                         let a = cur.pointee.ai_addr!
@@ -189,14 +190,11 @@ final class DNSProbe: ObservableObject {
                         }
                         p = cur.pointee.ai_next
                     }
-                    freeaddrinfo(res)
                 }
-                Task { @MainActor in
-                    self.results = ips
-                    if ips.isEmpty { self.error = "Uppslag misslyckades (\(code))" }
-                    cont.resume()
-                }
+                cont.resume(returning: (ips, code))
             }
         }
+        results = outcome.ips
+        if outcome.ips.isEmpty { error = "Uppslag misslyckades (\(outcome.code))" }
     }
 }

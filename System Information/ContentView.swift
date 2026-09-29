@@ -271,6 +271,12 @@ struct BatteryHealthCard: View {
                 if let h = m.live.battery.healthPct {
                     MeterBar(fraction: h / 100, color: p.levelColor(100 - h))
                 }
+                if m.live.battery.healthPct == nil {
+                    Text("Batteridetaljer (hälsa, cykler, temperatur) kräver riktig hårdvara — visas ej i simulatorn.")
+                        .font(.system(size: 10, design: .rounded))
+                        .foregroundStyle(p.tertiaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 HStack(spacing: 12) {
                     if let c = m.live.battery.cycleCount {
                         batteryChip("arrow.triangle.2.circlepath", "\(c) cykler")
